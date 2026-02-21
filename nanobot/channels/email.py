@@ -6,6 +6,7 @@ import imaplib
 import re
 import smtplib
 import ssl
+from collections import OrderedDict
 from datetime import date
 from email import policy
 from email.header import decode_header, make_header
@@ -55,7 +56,8 @@ class EmailChannel(BaseChannel):
         self.config: EmailConfig = config
         self._last_subject_by_chat: dict[str, str] = {}
         self._last_message_id_by_chat: dict[str, str] = {}
-        self._processed_uids: set[str] = set()  # Capped to prevent unbounded growth
+        # Ordered map for bounded dedup (oldest UID evicted first at cap)
+        self._processed_uids: OrderedDict[str, None] = OrderedDict()
         self._MAX_PROCESSED_UIDS = 100000
 
     async def start(self) -> None:
@@ -301,10 +303,7 @@ class EmailChannel(BaseChannel):
                 )
 
                 if dedupe and uid:
-                    self._processed_uids.add(uid)
-                    # mark_seen is the primary dedup; this set is a safety net
-                    if len(self._processed_uids) > self._MAX_PROCESSED_UIDS:
-                        self._processed_uids.clear()
+                    self._remember_processed_uid(uid)
 
                 if mark_seen:
                     client.store(imap_id, "+FLAGS", "\\Seen")
@@ -315,6 +314,18 @@ class EmailChannel(BaseChannel):
                 pass
 
         return messages
+
+    def _remember_processed_uid(self, uid: str) -> None:
+        """Remember a processed UID with bounded FIFO eviction."""
+        if uid in self._processed_uids:
+            self._processed_uids.move_to_end(uid)
+            return
+
+        self._processed_uids[uid] = None
+        # mark_seen is the primary dedup; this map is a safety net.
+        # Evict oldest entries instead of clearing the entire dedup state.
+        while len(self._processed_uids) > self._MAX_PROCESSED_UIDS:
+            self._processed_uids.popitem(last=False)
 
     @classmethod
     def _format_imap_date(cls, value: date) -> str:

@@ -1,5 +1,5 @@
-from email.message import EmailMessage
 from datetime import date
+from email.message import EmailMessage
 
 import pytest
 
@@ -80,6 +80,32 @@ def test_fetch_new_messages_parses_unseen_and_marks_seen(monkeypatch) -> None:
     # Same UID should be deduped in-process.
     items_again = channel._fetch_new_messages()
     assert items_again == []
+
+
+def test_processed_uid_eviction_keeps_recent_entries() -> None:
+    channel = EmailChannel(_make_config(), MessageBus())
+    channel._MAX_PROCESSED_UIDS = 3
+
+    channel._remember_processed_uid("u1")
+    channel._remember_processed_uid("u2")
+    channel._remember_processed_uid("u3")
+    channel._remember_processed_uid("u4")
+
+    assert list(channel._processed_uids.keys()) == ["u2", "u3", "u4"]
+
+
+def test_processed_uid_refresh_moves_existing_to_recent() -> None:
+    channel = EmailChannel(_make_config(), MessageBus())
+    channel._MAX_PROCESSED_UIDS = 3
+
+    channel._remember_processed_uid("u1")
+    channel._remember_processed_uid("u2")
+    channel._remember_processed_uid("u3")
+    channel._remember_processed_uid("u2")  # refresh existing
+    channel._remember_processed_uid("u4")
+
+    # u1 is oldest and should be evicted; refreshed u2 should be retained
+    assert list(channel._processed_uids.keys()) == ["u3", "u2", "u4"]
 
 
 def test_extract_text_body_falls_back_to_html() -> None:
