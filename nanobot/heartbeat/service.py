@@ -244,6 +244,16 @@ class HeartbeatService:
     def _build_execution_payload(self, decision: HeartbeatDecision, content: str) -> HeartbeatExecutionPayload:
         """Build a prioritized payload that preserves critical heartbeat details."""
         budget = self._selection_budget_for_model()
+        logger.debug(
+            "Heartbeat budget(model={}): refs={} must_keep={} priority={} heading={} context={} max_chars={}",
+            self.model,
+            budget.refs_max_lines,
+            budget.must_keep_max_matches,
+            budget.priority_max_matches,
+            budget.heading_max_lines,
+            budget.context_fallback_max_lines,
+            budget.max_render_chars,
+        )
         lines = content.splitlines()
         max_line = len(lines)
         selected: list[str] = []
