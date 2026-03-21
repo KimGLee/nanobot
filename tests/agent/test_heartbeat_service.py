@@ -204,7 +204,9 @@ async def test_tick_notifies_when_evaluator_says_yes(tmp_path, monkeypatch) -> N
     monkeypatch.setattr("nanobot.utils.evaluator.evaluate_response", _eval_notify)
 
     await service._tick()
-    assert executed == ["check deployments"]
+    assert len(executed) == 1
+    assert executed[0].startswith("check deployments")
+    assert "Use the following HEARTBEAT.md context" in executed[0]
     assert notified == ["deployment failed on staging"]
 
 
@@ -250,7 +252,9 @@ async def test_tick_suppresses_when_evaluator_says_no(tmp_path, monkeypatch) -> 
     monkeypatch.setattr("nanobot.utils.evaluator.evaluate_response", _eval_silent)
 
     await service._tick()
-    assert executed == ["check status"]
+    assert len(executed) == 1
+    assert executed[0].startswith("check status")
+    assert "Use the following HEARTBEAT.md context" in executed[0]
     assert notified == []
 
 
